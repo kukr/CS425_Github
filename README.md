@@ -1,4 +1,4 @@
-# [Group 37] Distributed System
+# [Group 54] Distributed System
 
 This project is an implementation of a basic distributed log querier and a distributed Failure detector
 
