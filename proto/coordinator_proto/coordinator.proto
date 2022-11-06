@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package coordinator;
+
+option go_package = "cs425/mp/coordinator";
+
+// The Coordinator service
+service Coordinator {
+    rpc QueryLogs (QueryRequest) returns (QueryReply) {}
+    rpc Test_GenerateLogs (GenerateLogsRequest) returns (GenerateLogsReply) {}
+  }
+  
+  message QueryRequest {
+    string query = 1;
+    bool isTest = 2;
+  }
+  
+  message QueryReply {
+    string logs = 1;
+    int64 totalMatches = 2;
+  }
+
+  message GenerateLogsRequest {
+  }
+
+  message GenerateLogsReply {
+    string status = 1;
+  }

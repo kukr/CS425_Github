@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package logger;
+
+option go_package = "cs425/mp/logger";
+
+// The Distributed Logger service definition.
+service Logger {
+    rpc FindLogs (FindLogsRequest) returns (FindLogsReply) {}
+    rpc Test_GenerateLogs (GenerateLogsRequest) returns (GenerateLogsReply) {}
+  }
+  
+  message FindLogsRequest {
+    string query = 1;
+    bool isTest = 2;
+  }
+  
+  message FindLogsReply {
+    string logs = 1;
+    int64 numMatches = 2;
+  }
+
+  message GenerateLogsRequest {
+    int32 filenumber = 1;
+  }
+
+  message GenerateLogsReply {
+    string status = 1;
+  }
