@@ -17,4 +17,17 @@ var (
 	SDFS_PORT = 53222
 
 	SDFS_PATH = "/home/uk3/CS425/mp/files/"
+
+	ALL_HOSTS = [10]string{
+		"fa22-cs425-5401.cs.illinois.edu",
+		"fa22-cs425-5402.cs.illinois.edu",
+		"fa22-cs425-5403.cs.illinois.edu",
+		"fa22-cs425-5404.cs.illinois.edu",
+		"fa22-cs425-5405.cs.illinois.edu",
+		"fa22-cs425-5406.cs.illinois.edu",
+		"fa22-cs425-5407.cs.illinois.edu",
+		"fa22-cs425-5408.cs.illinois.edu",
+		"fa22-cs425-5409.cs.illinois.edu",
+		"fa22-cs425-5410.cs.illinois.edu",
+	}
 )

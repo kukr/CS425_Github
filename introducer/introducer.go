@@ -98,7 +98,7 @@ func StartIntroducerAndListenToConnections(devmode bool, port int, udpserverport
 }
 
 func generateJoinBuffer(hostIp string) []byte {
-	replyBuf := []byte{byte(ml.messageJoin)}
+	replyBuf := []byte{byte(ml.MessageJoin)}
 	hostName := globob.IptoHostMap[hostIp]
 	replyBuf = append(replyBuf, ':')
 	replyBuf = append(replyBuf, []byte(hostName)...)

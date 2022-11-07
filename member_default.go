@@ -5,10 +5,6 @@ import (
 	"log"
 	"sync"
 	"time"
-	"net"
-	"strings"
-
-	globob "cs425/mp/glob"
 )
 
 type NodeStatus int
@@ -27,15 +23,6 @@ const (
 	Failed
 	Delete
 	Left
-)
-
-type messageType uint8
-
-const (
-	MessageUpdate      messageType = 1
-	MessageJoin        messageType = 2
-	MessageFailed      messageType = 3
-	MessageDelete 	   messageType = 4
 )
 
 // Type of Membership list
@@ -315,27 +302,6 @@ func (m1 *MembershipList) Merge(m2 []MembershipListItem) {
 	log.Printf("New Membership List: \n%v\n\n", newItems)
 }
 
-func generateFailedBuffer(hostIp string) []byte {
-	replyBuf := []byte{byte(MessageFailed)}
-	hostIp = (strings.Split(hostIp, ":"))[0]
-	hostName := globob.IptoHostMap[hostIp]
-	log.Printf("HostName wala : %s \n", hostName)
-	replyBuf = append(replyBuf, ':')
-	replyBuf = append(replyBuf, []byte(hostName)...)
-	return replyBuf
-}
-
-func GetthisHostIP() net.IP {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		log.Printf("Couldn't get the IP address of the process\n%v", err)
-	}
-	defer conn.Close()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
-	return localAddr.IP
-}
 /**
 * Update the states of the items in the membership list
 * Run by the stabilisation protocol
@@ -352,28 +318,6 @@ func (ml *MembershipList) UpdateStates() []MembershipListItem {
 			(currentTime-ml.items[i].State.Timestamp.Unix() >= int64(T_FAIL)) {
 			// If the process is Suspicious for more than T_FAIL seconds, mark it as failed
 			ml.items[i].State.Status = Failed
-
-			//failedMsg := generateFailedBuffer(ml.items[i].Id)
-			log.Printf("Host detected as failed: %s", ml.items[i].Id)
-			
-			thisHostIp := GetthisHostIP()
-
-			thisHostAddrwithPort := fmt.Sprintf("%s:%d", thisHostIp, globob.SDFS_PORT)
-			conn, err := net.Dial("udp", thisHostAddrwithPort)
-
-			if err != nil {
-				log.Println("Update States 1st error: ", err)
-			}
-
-			failedMsg := generateFailedBuffer(ml.items[i].Id)
-
-			_, err = conn.Write(failedMsg)
-
-			if err != nil {
-				log.Println("update States 2nd error: ", err)
-			}
-
-			conn.Close()
 
 		} else if ml.items[i].State.Status == Failed &&
 			(currentTime-ml.items[i].State.Timestamp.Unix() >= int64(T_DELETE)) {

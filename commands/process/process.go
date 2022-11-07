@@ -10,6 +10,14 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"net"
+	//"hash/crc32"
+	//"encoding/gob"
+	"hash/fnv"
+	"bytes"
+	"io/ioutil"
+	"path/filepath"
+	"math/rand"
 
 	process "cs425/mp/process"
 	globob "cs425/mp/glob"
@@ -30,22 +38,38 @@ type SDFSFileManager struct {
 	idm map[int]map[string]struct{}
 }
 
-	func (fileMan SDFSFileManager) insertFile(sdfsFileName string, ids []int ) {
+	func (fileMan *SDFSFileManager) insertFile(sdfsFileName string, ids []int ) {
 		for _, id := range ids {
 			fileMan.idm[id][sdfsFileName] = struct{}{}
 		}
 		_, isPresent := fileMan.versionMan[sdfsFileName]
-		if !isPresent {
+		if !isPresent && len(ids) > 0 {
 			fileMan.versionMan[sdfsFileName] = 0
 		}
-		fileMan.versionMan[sdfsFileName] += 1
+		//fmt.Println("Length of ids: ", len(ids))
+		//fmt.Println(ids)
+		if len(ids) > 0 {
+			fileMan.versionMan[sdfsFileName] += 1
+		}
+		//fmt.Println(fileMan.versionMan[sdfsFileName])
 		for _, id := range ids {
-			fileMan.replicaMan[sdfsFileName] = append(fileMan.replicaMan[sdfsFileName], id)
+			replicaMatch := false
+			for j := 0; j < len(fileMan.replicaMan[sdfsFileName]); j++ {
+				if fileMan.replicaMan[sdfsFileName][j] == id {
+					replicaMatch = true
+					break
+				}
+				
+			}
+			if !replicaMatch {
+				fileMan.replicaMan[sdfsFileName] = append(fileMan.replicaMan[sdfsFileName], id)
+				fmt.Println(id)
+			}
 		}
 
 	}
 
-	func (fileMan SDFSFileManager) deleteFile(sdfsFileName string) {
+	func (fileMan *SDFSFileManager) deleteFile(sdfsFileName string) {
 		for i:= 1; i <= 10; i++ {
 			_, isPresent := fileMan.idm[i][sdfsFileName]
 			if isPresent {
@@ -76,40 +100,48 @@ type Server struct {
 	//failureDetector FailureDetector
 }
 
-func (s Server) newFileManager () {
-	s.fileTab = SDFSFileManager{}
-	s.fileTab.versionMan = make(map[string]int)
-	s.fileTab.replicaMan = make(map[string][]int)
-	s.fileTab.idm = make(map[int]map[string]struct{})
-	for i:=1; i<=10; i++ {
-		s.fileTab.idm[i] = make(map[string]struct{})
-	}
+// type updateMessage struct {
+// 	Filename string
+// 	replicas []int
+// 	version int
+// }
+
+// func (s Server) newFileManager () {
+// 	s.fileTab = SDFSFileManager{}
+// 	s.fileTab.versionMan = make(map[string]int)
+// 	s.fileTab.replicaMan = make(map[string][]int)
+// 	s.fileTab.idm = make(map[int]map[string]struct{})
+// 	for i:=1; i<=10; i++ {
+// 		s.fileTab.idm[i] = make(map[string]struct{})
+// 	}
 	
-}
+// }
 
-func (s *Server) init() {
-	s.newFileManager()
-	thisHostName, err := os.Hostname()
+// func (s Server) init() {
+// 	s.newFileManager()
+// 	thisHostName, err := os.Hostname()
 
-	intro.CheckErr(err)
-	s.host = thisHostName
-	s.port = globob.SDFS_PORT
-	s.id = s.getIdFromHost(s.host)
-	s.addr.host = s.host
-	s.addr.port = s.port
-	s.lives = []int{}
+// 	if err!=nil {
+// 		fmt.Println("Error in getting this Host Name: ", err)
+// 	}
+// 	s.host = thisHostName
+// 	s.port = globob.SDFS_PORT
+// 	s.id = s.getIdFromHost(s.host)
+// 	s.addr.host = s.host
+// 	s.addr.port = s.port
+// 	s.lives = []int{}
 
-	// fileMan.fm = make(map[string]map[string][]interface{})
-	// fileMan.fm[sdfsFileName]["replicas"][1] = "fa22-cs425-5405.cs.illinois.edu"
-	// fileMan.fm[sdfsFileName]["version"] = 2
-}
+// 	// fileMan.fm = make(map[string]map[string][]interface{})
+// 	// fileMan.fm[sdfsFileName]["replicas"][1] = "fa22-cs425-5405.cs.illinois.edu"
+// 	// fileMan.fm[sdfsFileName]["version"] = 2
+// }
 
-func NewServer() *Server {
-	server := &Server{}
-	//server.loadConfigFromJSON(jsonFile)
-	server.init()
-	return server
-}
+// func NewServer() *Server {
+// 	server := &Server{}
+// 	//server.loadConfigFromJSON(jsonFile)
+// 	server.init()
+// 	return server
+// }
 
 // func (s *Server) ListenUDP() error {
 // 	/* Lets prepare a address at any address at port s.config.Port*/
@@ -126,46 +158,361 @@ func NewServer() *Server {
 // 	return nil
 // }
 
-func (s Server) receiver () {
-	// fileTabVerMan := &s.fileTab.versionMan
-	// fileTabRepMan := &s.fileTab.replicaMan
+// func (s Server) handleUpdateConnection (conn net.Conn) {
 
-	// indexMan := &s.fileTab.idm
+// 	fileTabVerMan := s.fileTab.versionMan
+// 	fileTabRepMan := s.fileTab.replicaMan
 
-	// serverAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", s.port))
+// 	indexMan := s.fileTab.idm
 
-	// if err != nil {
-	// 	fmt.Println("err: ", err)
-	// }
+// 	//fmt.Println("Handle new update message")
+// 			dec := gob.NewDecoder(conn)
+//    			p := &updateMessage{}
+//     		dec.Decode(p)
 
-	// conn, err := net.ListenUDP("udp", serverAddr)
+// 			fileName := p.Filename
+// 			replicaSet := p.replicas
+// 			 for _, replica := range replicaSet {
+// 				indexMan[replica][fileName] = struct{}{} 
+// 			 }
 
-	// if err != nil {
-	// 	fmt.Println("Listen err: ", err)
-	// }
+// 			 _, isPresent := fileTabVerMan[fileName]
+// 			if !isPresent {
+// 				fileTabVerMan[fileName] = 1
+// 			}
 
-	// defer conn.Close()
+// 			fileTabVerMan[fileName] = p.version
+			 
+// 			for _, i := range replicaSet {
+// 				match := false
+// 				for j := 0; j < len(fileTabRepMan[fileName]); j++ {
+// 					if i == fileTabRepMan[fileName][j] {
+// 						match = true
+// 					}
+// 				}
 
-	// var recBuf []byte
-	// n, remote_addr, err := conn.ReadFromUDP(recBuf)
+// 				if !match {
+// 					fileTabRepMan[fileName] = append(fileTabRepMan[fileName], i)
+// 				}
+// 			}
+// 			conn.Close()
 
-	// if err != nil {
-	// 	fmt.Println("Error: ", err)
-	// 	//continue
-	// }
+// }
 
-	// buf := recBuf[:n]
+// func (s Server) handleUpdate () {
 
-	// if len(buf) == 0 {
-	// 	//continue
-	// }
+// 	ln, err := net.Listen("tcp", ":53333")
+	
+//     if err != nil {
+//         // handle error
+// 		fmt.Println("Cannot start handleUpdate Server. Error: ", err)
+//     }
+
+// 	defer ln.Close()
+	
+// 	for {
+// 		conn, err := ln.Accept()
+// 		if err != nil {
+//             panic(err)
+//         }
+
+// 		go s.handleUpdateConnection(conn)
+
+// 	}
+
+func generateFailedBuffer(hostIpName string) []byte {
+	var messageEncode uint8
+
+	messageEncode = 3
+	replyBuf := []byte{byte(messageEncode)}
+	replyBuf = append(replyBuf, ':')
+	replyBuf = append(replyBuf, []byte(hostIpName)...)
+	return replyBuf
+}
+
+func (s *Server) receiver () {
+
+	//go s.handleUpdate ()
+
+	 fileTabVerMan := s.fileTab.versionMan
+	 fileTabRepMan := s.fileTab.replicaMan
+
+	 indexMan := s.fileTab.idm
+
+	serverAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", s.port))
+
+	if err != nil {
+		fmt.Println("err: ", err)
+	}
+
+	conn, err := net.ListenUDP("udp", serverAddr)
+
+	if err != nil {
+		fmt.Println("Listen err: ", err)
+	}
+
+	defer conn.Close()
+
+	recBuf := make([]byte, 1024)
+	for {
+		n, _, err := conn.ReadFromUDP(recBuf)
+
+		//fmt.Println("To check if it is an infinite loop")
+
+		if err != nil {
+			fmt.Println("Error: ", err)
+			continue
+		}
+
+		buf := recBuf[:n]
+
+		if len(buf) == 0 {
+			continue
+		}
+
+		bufList := bytes.Split(buf, []byte(":"))
+
+		messageTypeInt := uint8(bufList[0][0])
+		fmt.Println(messageTypeInt)
+
+		if messageTypeInt == 1 {
+			fmt.Println("[INFO] Received Update Message")
+			var replicaSet []int
+			fileName := string(bufList[1])
+
+			fmt.Println(fileName)
+
+			repliDecStr := string(bufList[2])
+
+			replicaList := strings.Split(repliDecStr,",")
+			//fmt.Println(replicaList)
+			for _, replicaId := range replicaList {
+				replicaIdInt,_ := strconv.Atoi(replicaId)
+				replicaSet = append(replicaSet, replicaIdInt)
+			}
+
+			//fmt.Println(replicaSet)
+
+			for _, replica := range replicaSet {
+				indexMan[replica][fileName] = struct{}{} 
+			 }
+
+			 _, isPresent := fileTabVerMan[fileName]
+			if !isPresent {
+				fileTabVerMan[fileName] = 1
+			}
+
+			fileTabVerMan[fileName] = int(bufList[3][0])
+
+			for _, i := range replicaSet {
+				match := false
+				for j := 0; j < len(fileTabRepMan[fileName]); j++ {
+					if i == fileTabRepMan[fileName][j] {
+						match = true
+					}
+				}
+
+				if !match {
+					fileTabRepMan[fileName] = append(fileTabRepMan[fileName], i)
+					fmt.Println(i)
+				}
+				//fmt.Println(fileTabRepMan)
+			}
+
+		} else if messageTypeInt == 2 {
+			fmt.Println("[INFO] Received join message.")
+			livesList := bytes.Split(bufList[1], []byte(","))
+			for _, liveId := range livesList {
+				listMatch := false
+				for _, j := range s.lives {
+					if int(liveId[0]) == j {
+						listMatch = true
+						break
+					}
+				}
+
+				if !listMatch {
+					s.lives = append(s.lives, int(liveId[0]))
+				}
+			}
+
+		} else if messageTypeInt == 3 {
+			fmt.Println("[INFO] Failed Message")
+			failIdName := string(bufList[1])
+			failId := getIdFromHost(failIdName)
+
+			failIdexist := false
+			for it := 0; it < len(s.lives); it++ {
+
+				if failId == s.lives[it] {
+					failIdexist = true
+					break
+				}
+
+			}
+			if !failIdexist {
+				continue
+			}
+			for _, curHostName := range globob.ALL_HOSTS {
+				if curHostName != s.host {
+					currAddrwithPort := fmt.Sprintf("%s:%d", curHostName, globob.SDFS_PORT)
+					conn, err := net.Dial("udp", currAddrwithPort)
+
+					if err != nil {
+						log.Fatal("Connection error", err)
+					}
+
+					failedMsgSend := generateFailedBuffer(failIdName)
+
+					_, err = conn.Write(failedMsgSend)
+		
+					if err != nil {
+						log.Println("update States 2nd error: ", err)
+					}
+		
+					conn.Close()
+				}
+			}
+
+			var newLives []int
+
+			for it := 0; it < len(s.lives); it++ {
+				if failId == s.lives[it] {
+					continue
+				} else {
+					newLives = append(newLives, s.lives[it])
+				}
+			}
+
+			s.lives = newLives
+
+			for key, _ := range indexMan[failId] {
+
+				var replicas []int
+
+				for it := 0; it < len(fileTabRepMan[key]); it++ {
+					if failId == fileTabRepMan[key][it] {
+						continue
+					} else {
+						replicas = append(replicas, fileTabRepMan[key][it])
+					}
+				}
+				fileTabRepMan[key] = replicas
+
+				maxReplica := replicas[0]
+
+				for _, replica:= range replicas {
+					if replica > maxReplica {
+						maxReplica = replica
+					}
+				}
+
+				if s.id == maxReplica {
+					var availSour []int
+
+					for it := 0; it < len(s.lives); it++ {
+						replicaMat := false
+						for aj := 0; aj < len(replicas); aj++ {
+							if s.lives[it] == replicas[aj] {
+								replicaMat = true
+								break
+							}
+						}
+						if !replicaMat {
+							availSour = append(availSour, s.lives[it])
+						}
+					}
+
+					randomIndex := rand.Intn(len(availSour))
+					rid := availSour[randomIndex]
+
+					files, err := ioutil.ReadDir(globob.SDFS_PATH)
+    				if err != nil {
+        				log.Fatal("Read Directory Failed: ", err)
+    				}
+
+					for _, f := range files {
+						filePath := filepath.Join(globob.SDFS_PATH, f.Name())
+				
+						if !f.IsDir() && strings.HasPrefix(f.Name(), key) {
+							fmt.Println("[INFO] Re-replica file %s to %d", key, rid)
+							rHost := s.getHostFromId(rid)
+							prefix := "uk3" + "@" + rHost
+							cmd := exec.Command("scp", filePath , prefix + ":" + filePath)//get_hostname_from_id
+							err := cmd.Run()
+
+							if err != nil{
+								fmt.Println("Re-replicate error: ", err)
+							}
+						}
+					}
+
+					newReplicas := append(fileTabRepMan[key], rid)
+
+					updateMsg := generateUpdateBuffer(key, newReplicas, fileTabVerMan[key])
+
+					for _, curHostName := range globob.ALL_HOSTS {
+						hostAlive := false
+						for i := 0; i < len(s.lives); i++ {
+							if getIdFromHost(curHostName) == s.lives[i] {
+								hostAlive = true
+								break
+							}
+						}
+						if hostAlive {
+							fmt.Println("CurrentHostName: ", curHostName)
+							thisHostAddrwithPort := fmt.Sprintf("%s:%d", curHostName, globob.SDFS_PORT)
+							conne, err := net.Dial("udp", thisHostAddrwithPort)
+							if err != nil {
+								log.Fatal("Connection error", err)
+							}
+				
+							_, err = conne.Write(updateMsg)
+				
+							if err != nil {
+								log.Println("update States 2nd error: ", err)
+							}
+				
+							conne.Close()
+						
+						}
+					}
+
+				}
 
 
 
+			}
+
+			for key, _ := range indexMan[failId] {
+				delete(indexMan[failId], key)
+			}
+
+		} else if messageTypeInt == 4 {
+			fmt.Println("[INFO] Receive Delete Message")
+			fileName := string(bufList[1])
+			s.fileTab.deleteFile(fileName)
+
+			files, err := ioutil.ReadDir(globob.SDFS_PATH)
+    		if err != nil {
+        		log.Fatal(err)
+    		}
+
+			for _, f := range files {
+				filePath := filepath.Join(globob.SDFS_PATH, f.Name())
+				
+				if !f.IsDir() && strings.HasPrefix(f.Name(), fileName) {
+					os.Remove(filePath)
+				}
+			}
+
+		}
+
+	}
 
 }
 
-func (s Server) getIdFromHost(host string) int {
+func getIdFromHost(host string) int {
         // """
         // e.g. fa18-cs425-g33-01.cs.illinois.edu -> 1
         // :param host: host name
@@ -174,48 +521,211 @@ func (s Server) getIdFromHost(host string) int {
         hostSplit := (strings.Split(host, "."))[0]
         hostIdReturn := (strings.Split(hostSplit, "-"))
         hostIdInt,_ := strconv.Atoi(hostIdReturn[len(hostIdReturn) - 1])
-        return hostIdInt
+        hostIdInt = hostIdInt%10
+		if hostIdInt == 0 {
+			return 10
+		} else {
+        	return hostIdInt
+		}
 }
   
-func (s Server) getHostFromId (hostId string) string {
+func (s *Server) getHostFromId (hostId int) string {
         // """
         // e.g. 1 -> fa18-cs425-g33-01.cs.illinois.edu
         // :param host_id: int id
         // :return: host str
         // """
-        return fmt.Sprintf("fa18-cs425-g33-%02d.cs.illinois.edu", hostId)
+        return fmt.Sprintf("fa22-cs425-54%02d.cs.illinois.edu", hostId)
 }
-// func putFile()
+
+func hashCode(s string) int {
+
+	h := fnv.New32a()
+    h.Write([]byte(s))
+	md5 := int(h.Sum32())
+	sum := 0
+	for i :=0; i<10; i++ {
+		sum = sum + md5%10
+		md5 = md5/10
+	}
+
+	return sum%10 + 1
+}
+
+// func (s Server) informNodesInsertIntoSdfs(sdfsFileName string, targetIds []int, verNo int){
+// 	p := &updateMessage{sdfsFileName,targetIds, verNo}
+// 	for _, curHostName := range globob.ALL_HOSTS {
+// 		hostAlive := false
+// 		for i := 0; i < len(s.lives); i++ {
+// 			if getIdFromHost(curHostName) == s.lives[i] {
+// 				hostAlive = true
+// 				break
+// 			}
+// 		}
+// 		if hostAlive {
+// 			fmt.Println("CurrentHostName: ", curHostName)
+// 		conn, err := net.Dial("tcp", curHostName+":53333")
+// 		if err != nil {
+// 			log.Fatal("Connection error", err)
+// 		}
+// 		encoder := gob.NewEncoder(conn)
+// 		fmt.Println("Sending update message")
+// 		encoder.Encode(p)
+// 		conn.Close()
+// 		}
+// 	}
+// }
 
 
-func (s Server) getFile(sdfsFileName string, localFileName string, verNo string) {
-		fileTabVerMan := &s.fileTab.versionMan
-		// fileTabRepMan := &s.fileTab.replicaMan
 
-        _, ok := (*fileTabVerMan)[sdfsFileName];
+func (s *Server) getDefaultReplicas (pid int) []int {
+	var setReplicas []int
+	count := 1
+	for i := 0; i < 10; i++ {
+		mod := ((pid+i)%10) + 1
+		aliveMatch := false
+		for j := 0; j < len(s.lives); j++ {
+			if mod == s.lives[j] {
+				aliveMatch = true
+				break
+			}
+		}
+		if aliveMatch && count <= 4 {
+			count += 1
+			setReplicas = append(setReplicas, mod)
+		}
+	}
+	return setReplicas
+}
+
+func generateUpdateBuffer(sdfsFileName string, targetIds []int, verNo int) []byte {
+	
+	var messageEncode uint8
+
+	messageEncode = 1
+	replyBuf := []byte{byte(messageEncode)}
+	replyBuf = append(replyBuf, ':')
+	replyBuf = append(replyBuf, []byte(sdfsFileName)...)
+	replyBuf = append(replyBuf, ':')
+	replicaString := ""
+	for i := 0; i < len(targetIds) - 1; i++ {
+		replicaString = replicaString + strconv.Itoa(targetIds[i])
+		replicaString = replicaString + "," 
+	}
+	replicaString = replicaString + strconv.Itoa(targetIds[len(targetIds) - 1])
+	fmt.Println(replicaString)
+	replyBuf = append(replyBuf, []byte(replicaString)...)
+	replyBuf = append(replyBuf, ':')
+	replyBuf = append(replyBuf, byte(verNo))
+	
+	return replyBuf
+}
+
+func (s *Server) putFile(localFileName string, sdfsFileName string){
+	
+	if _, err := os.Stat(globob.SDFS_PATH); os.IsNotExist(err) {
+		fmt.Println("[ERROR] No such local file: %s", localFileName)
+		return
+	}
+
+	fileTabVerMan := s.fileTab.versionMan
+	fileTabRepMan := s.fileTab.replicaMan
+
+	hashVal := hashCode(localFileName)
+	_, ok := fileTabVerMan[sdfsFileName]
+
+	var targetIds []int
+	var versionNo int
+    if ok {
+		fmt.Println("Came Here")
+		targetIds = fileTabRepMan[sdfsFileName]
+		versionNo = fileTabVerMan[sdfsFileName]
+		fmt.Println("Version No: ", versionNo)
+	} else {
+		versionNo = 0;
+		targetIds = s.getDefaultReplicas(hashVal)
+		fmt.Println("Target Ids: ", targetIds)
+	}
+
+	fmt.Println("Target ids: ", targetIds)
+	versionNo += 1
+	vFileName := sdfsFileName + "," + strconv.Itoa(versionNo)
+	fmt.Printf("[INFO] Put file %s to %s \n", localFileName, vFileName)
+	var targetActual []int
+	for _, i := range targetIds {
+		targetHost := s.getHostFromId(i)
+		prefix := "uk3" + "@" + targetHost
+		fmt.Println("Target Host: ", targetHost)
+		cmd := exec.Command("scp", localFileName , prefix + ":" + filepath.Join(globob.SDFS_PATH, vFileName))//get_hostname_from_id
+		err := cmd.Run()
+		if err != nil{
+			fmt.Println("putfile copy error: ", err, i)
+		} else{
+			targetActual = append(targetActual, i)
+		}
+	}
+	fmt.Println("Target Actual: ", targetActual)
+	(&(s.fileTab)).insertFile(sdfsFileName,targetActual)
+
+	updateMsg := generateUpdateBuffer(sdfsFileName, targetActual, fileTabVerMan[sdfsFileName])
+
+	for _, curHostName := range globob.ALL_HOSTS {
+		hostAlive := false
+		for i := 0; i < len(s.lives); i++ {
+			if getIdFromHost(curHostName) == s.lives[i] {
+				hostAlive = true
+				break
+			}
+		}
+		if hostAlive {
+			// fmt.Println("CurrentHostName: ", curHostName)
+			thisHostAddrwithPort := fmt.Sprintf("%s:%d", curHostName, globob.SDFS_PORT)
+			conn, err := net.Dial("udp", thisHostAddrwithPort)
+			if err != nil {
+				log.Fatal("Connection error", err)
+			}
+
+			_, err = conn.Write(updateMsg)
+
+			if err != nil {
+				log.Println("update States 2nd error: ", err)
+			}
+
+			conn.Close()
+		
+		}
+	}
+
+	}
+
+
+
+func (s *Server) getFile(sdfsFileName string, localFileName string, verNo string) {
+	fileTabVerMan := s.fileTab.versionMan
+	fileTabRepMan := s.fileTab.replicaMan
+
+	_, ok := fileTabVerMan[sdfsFileName];
         if !ok {
             fmt.Printf("Error: No such sdfs file: %s" , sdfsFileName)
             return
         }
 
-        // Use it later : fromId := (*fileTabRepMan)[sdfsFileName][0]
-        v := (*fileTabVerMan)[sdfsFileName]
+        fromId := fileTabRepMan[sdfsFileName][0]
+        v := fileTabVerMan[sdfsFileName]
         // to get last updated version by default (command get)
         if len(verNo) == 0 {
             version := v
             vFileName := sdfsFileName + "," + strconv.Itoa(version)
             fmt.Println(vFileName)
-            prefix := "uk3" + "@" + "fa22-cs425-5401.cs.illinois.edu"
-            //fmt.Printf("Get file %s from chosen replica %d" % (v_file_name, from_id))
-	    	fmt.Println(prefix + ":" + globob.SDFS_PATH+localFileName)
-	    	cmd := exec.Command("scp", prefix + ":" + globob.SDFS_PATH+localFileName, "copied.txt")
+            prefix := "uk3" + "@" + s.getHostFromId(fromId)
+            fmt.Printf("Get file %s from chosen replica %d" , vFileName, fromId)
+	    	//fmt.Println(prefix + ":" + globob.SDFS_PATH+localFileName)
+	    	cmd := exec.Command("scp", prefix + ":" + globob.SDFS_PATH+vFileName, localFileName)
 	    	err := cmd.Run()
             if err != nil {
 				fmt.Println("Copy Error: ", err)
             }
         } else {
-
-
         	verNoInt, _ := strconv.Atoi(verNo)
 
             if verNoInt > v {
@@ -229,16 +739,17 @@ func (s Server) getFile(sdfsFileName string, localFileName string, verNo string)
             }
 
             for i := v; i >= v - verNoInt +1; i-- {
-            	prefix := "uk3" + "@" + "fa22-cs425-5401.cs.illinois.edu"
-            	vFileName := "temp.txt" + "," + strconv.Itoa(i)
+            	prefix := "uk3" + "@" + s.getHostFromId(fromId)
+				tempVFileName := "temp.txt" + "," + strconv.Itoa(i)
+            	vFileName := sdfsFileName + "," + strconv.Itoa(i)
             	fmt.Println(prefix + ":" + globob.SDFS_PATH+localFileName)
-            	cmd := exec.Command("scp", prefix + ":" + globob.SDFS_PATH+localFileName, vFileName)
+            	cmd := exec.Command("scp", prefix + ":" + filepath.Join(globob.SDFS_PATH, vFileName), tempVFileName)
             	error := cmd.Run()
             	if error != nil {
 					fmt.Println("Copy Error: ", error)
            	 	}
 
-           	 	fi, er := os.Open(vFileName)
+           	 	fi, er := os.Open(tempVFileName)
 
            	 	if er != nil {
         			panic(er)
@@ -259,17 +770,17 @@ func (s Server) getFile(sdfsFileName string, localFileName string, verNo string)
            	 	fo.Close()
            	 	fi.Close()
 
-           	 	os.Remove(vFileName)
+           	 	os.Remove(tempVFileName)
 
             }
         }
 }
 
-func (s Server) deleteFile (sdfsFileName string) {
-	fileTabVerMan := &s.fileTab.versionMan
+func (s *Server) deleteFile (sdfsFileName string) {
+	fileTabVerMan := s.fileTab.versionMan
 	// fileTabRepMan := &s.fileTab.replicaMan
 
-	_, ok := (*fileTabVerMan)[sdfsFileName];
+	_, ok := fileTabVerMan[sdfsFileName];
     if !ok {
         fmt.Printf("Error: No such sdfs file: %s" , sdfsFileName)
         return
@@ -277,29 +788,58 @@ func (s Server) deleteFile (sdfsFileName string) {
 
     s.fileTab.deleteFile(sdfsFileName)
 
-    //TODO: Send delete message to all the servers
+    var messageEncode uint8
+
+	messageEncode = 4
+	replyBuf := []byte{byte(messageEncode)}
+	replyBuf = append(replyBuf, ':')
+		
+	replyBuf = append(replyBuf, []byte(sdfsFileName)...)
+
+	for _, curHostName := range globob.ALL_HOSTS {
+		currAddrwithPort := fmt.Sprintf("%s:%d", curHostName, globob.SDFS_PORT)
+		conn, err := net.Dial("udp", currAddrwithPort)
+
+		if err != nil {
+			log.Fatal("Connection error", err)
+		}
+
+		defer conn.Close()
+		
+
+		_, err = conn.Write(replyBuf)
+
+		if err != nil {
+			log.Fatal("Connection write error", err)
+		}
+
+	}
+
 }
 
-func (s Server) listSdfsFiles (sdfsFileName string) {
-        fileTabVerMan := &s.fileTab.versionMan
-        fileTabRepMan := &s.fileTab.replicaMan
+func (s *Server) listSdfsFiles (sdfsFileName string) {
+		fileTabVerMan := s.fileTab.versionMan
+		fileTabRepMan := s.fileTab.replicaMan
 
-        _, ok := (*fileTabVerMan)[sdfsFileName];
+		_, ok := fileTabVerMan[sdfsFileName]
         if !ok {
             fmt.Printf("Error: No such sdfs file: %s" , sdfsFileName)
             return
         }
 
         fmt.Printf("All the machines where %s is stored: \n", sdfsFileName)
-        fmt.Println((*fileTabRepMan)[sdfsFileName])
+        fmt.Println(fileTabRepMan[sdfsFileName])
 
 }
 
-func (s Server) showStore () {
-	hostId := s.getIdFromHost(s.host)
+func (s *Server) showStore () {
+	hostId := getIdFromHost(s.host)
 	//get host id and display the idm for this host id. Write the function for host id at the beginning as a helper function
 	fmt.Println("All the files stored on this machine:")
-	fmt.Println(s.fileTab.idm[hostId])
+	for key, _ := range s.fileTab.idm[hostId] {
+		fmt.Print(key, " ")
+	}
+	fmt.Print("\n")
 }
 
 
@@ -409,7 +949,30 @@ func main() {
 	// Start the process
 	process.Run(*port, *udpserverport, *log_process_port, wg, introAddr, *devmode)
 
-	ser := NewServer()
+	ser := &Server{}
+	ser.fileTab = SDFSFileManager{}
+	ser.fileTab.versionMan = make(map[string]int)
+	ser.fileTab.replicaMan = make(map[string][]int)
+	ser.fileTab.idm = make(map[int]map[string]struct{})
+	// fmt.Println("New File Manager")
+	for i:=1; i<=10; i++ {
+		ser.fileTab.idm[i] = make(map[string]struct{})
+	}
+	thisHostName, err := os.Hostname()
+	//fmt.Println(thisHostName)
+
+	if err != nil {
+		fmt.Println("Main Err: ", err)
+	}
+	ser.host = thisHostName
+	ser.port = globob.SDFS_PORT
+	ser.id = getIdFromHost(ser.host)
+	ser.addr.host = ser.host
+	ser.addr.port = ser.port
+	ser.lives = []int{}
+	ser.lives = append(ser.lives, ser.id)
+	//fmt.Println("Server lives: ", ser.lives)
+	//ser.init()
 	ser.Run()
 
 	for {
@@ -429,12 +992,19 @@ func main() {
         "============================ \n\n\t: "
 		
 		fmt.Printf(helperString)
-		var command string
+
+		scanner := bufio.NewScanner(os.Stdin)
+		if scanner.Scan() {
+    		command := scanner.Text()
+    		//fmt.Printf("Input was: %q\n", command)
+
 
 		// Taking input from user
-		fmt.Scanln(&command)
+		//fmt.Scanln(&command)
+		//fmt.Println(command)
 
 		commandSplit := strings.Split(command, " ")
+		//fmt.Println(commandSplit)
 
 		if strings.HasPrefix(command, "get-versions") {
 			if len(commandSplit) != 4 {
@@ -448,28 +1018,28 @@ func main() {
 				fmt.Println("Error in the arguments, Correct Format: get sdfs_file_name local_file_name")
 				continue
 			}
-			ser.getFile(commandSplit[1], commandSplit[3], "")
+			ser.getFile(commandSplit[1], commandSplit[2], "")
 		} else if strings.HasPrefix(command, "put"){
-			if len(commandSplit) != 4 {
-				fmt.Println("Error in the arguments, Correct Format: get sdfs_file_name local_file_name")
+			if len(commandSplit) != 3 {
+				fmt.Println("Error in the arguments, Correct Format: put sdfs_file_name local_file_name")
 				continue
 			}
-			//s.putFile()
+			ser.putFile(commandSplit[1], commandSplit[2])
 		} else if strings.HasPrefix(command, "delete"){
-			if len(commandSplit) != 4 {
-				fmt.Println("Error in the arguments, Correct Format: get sdfs_file_name local_file_name")
+			if len(commandSplit) != 2 {
+				fmt.Println("Error in the arguments, Correct Format: delete sdfs_file_name")
 				continue
 			}
 			ser.deleteFile(commandSplit[1])
 		} else if strings.HasPrefix(command, "ls"){
-			if len(commandSplit) != 4 {
-				fmt.Println("Error in the arguments, Correct Format: get sdfs_file_name local_file_name")
+			if len(commandSplit) != 2 {
+				fmt.Println("Error in the arguments, Correct Format: ls sdfs_file_name")
 				continue
 			}
 			ser.listSdfsFiles(commandSplit[1])
 		} else if strings.HasPrefix(command, "store"){
-			if len(commandSplit) != 4 {
-				fmt.Println("Error in the arguments, Correct Format: get sdfs_file_name local_file_name")
+			if len(commandSplit) != 1 {
+				fmt.Println("Error in the arguments, Correct Format: store")
 				continue
 			}
 			ser.showStore()
@@ -492,6 +1062,7 @@ func main() {
             fmt.Println("[ERROR] Invalid input arg %s", command)
         }
 
+		}
 	}
 
 	// Wait for the wait group to be done
